@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teleprompter</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #0a0a0a;
+            color: #e0e0e0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Setup screen */
+        .setup {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 2rem;
+            gap: 1.5rem;
+        }
+
+        .setup.hidden {
+            display: none;
+        }
+
+        .setup h1 {
+            font-size: 2rem;
+            font-weight: 300;
+            color: #fff;
+        }
+
+        .setup textarea {
+            width: 100%;
+            max-width: 800px;
+            height: 300px;
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 8px;
+            color: #e0e0e0;
+            font-size: 1rem;
+            padding: 1rem;
+            resize: vertical;
+            font-family: inherit;
+        }
+
+        .setup textarea:focus {
+            outline: none;
+            border-color: #4a9eff;
+        }
+
+        .setup textarea::placeholder {
+            color: #666;
+        }
+
+        .controls {
+            display: flex;
+            gap: 2rem;
+            align-items: center;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .control-group label {
+            color: #888;
+            font-size: 0.875rem;
+        }
+
+        .control-group input[type="range"] {
+            width: 150px;
+            accent-color: #4a9eff;
+        }
+
+        .control-group input[type="number"] {
+            width: 80px;
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 4px;
+            color: #e0e0e0;
+            padding: 0.5rem;
+            text-align: center;
+            font-size: 1rem;
+        }
+
+        .start-btn {
+            background: #4a9eff;
+            color: #000;
+            border: none;
+            padding: 1rem 3rem;
+            font-size: 1.25rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background 0.2s;
+        }
+
+        .start-btn:hover {
+            background: #6ab0ff;
+        }
+
+        /* Prompter screen */
+        .prompter {
+            display: none;
+            height: 100vh;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .prompter.active {
+            display: block;
+        }
+
+        .script-container {
+            position: absolute;
+            width: 100%;
+            padding: 0 10%;
+            transition: transform 0.1s linear;
+        }
+
+        .script-text {
+            font-size: 3rem;
+            line-height: 1.6;
+            text-align: center;
+            padding-top: 45vh;
+            padding-bottom: 55vh;
+        }
+
+        /* Reading guide line */
+        .guide-line {
+            position: fixed;
+            top: 45vh;
+            left: 5%;
+            right: 5%;
+            height: 4px;
+            background: linear-gradient(90deg, transparent, #4a9eff, transparent);
+            pointer-events: none;
+            opacity: 0.6;
+        }
+
+        /* Floating controls */
+        .float-controls {
+            position: fixed;
+            bottom: 2rem;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 1rem;
+            background: rgba(20, 20, 20, 0.9);
+            padding: 1rem 2rem;
+            border-radius: 50px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .prompter:hover .float-controls {
+            opacity: 1;
+        }
+
+        .float-btn {
+            background: #333;
+            color: #fff;
+            border: none;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 1.25rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s;
+        }
+
+        .float-btn:hover {
+            background: #4a9eff;
+        }
+
+        .float-btn.active {
+            background: #4a9eff;
+        }
+
+        .speed-display {
+            color: #888;
+            font-size: 0.875rem;
+            display: flex;
+            align-items: center;
+            padding: 0 1rem;
+        }
+
+        /* Countdown overlay */
+        .countdown {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 8rem;
+            font-weight: 200;
+            color: #4a9eff;
+            z-index: 100;
+        }
+
+        .countdown.hidden {
+            display: none;
+        }
+
+        /* Progress bar */
+        .progress-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 3px;
+            background: #4a9eff;
+            transition: width 0.1s linear;
+        }
+    </style>
+</head>
+<body>
+    <!-- Setup Screen -->
+    <div class="setup" id="setup">
+        <h1>Teleprompter</h1>
+        <textarea id="scriptInput" placeholder="Paste your script here..."></textarea>
+        <div class="controls">
+            <div class="control-group">
+                <label>Scroll Speed (px/sec)</label>
+                <input type="range" id="speedSlider" min="10" max="150" value="50">
+                <input type="number" id="speedNumber" min="10" max="150" value="50">
+            </div>
+            <div class="control-group">
+                <label>Font Size</label>
+                <input type="range" id="fontSlider" min="24" max="72" value="48">
+                <input type="number" id="fontNumber" min="24" max="72" value="48">
+            </div>
+            <div class="control-group">
+                <label>Countdown (sec)</label>
+                <input type="number" id="countdownInput" min="0" max="10" value="3">
+            </div>
+        </div>
+        <button class="start-btn" id="startBtn">Start</button>
+    </div>
+
+    <!-- Countdown -->
+    <div class="countdown hidden" id="countdown"></div>
+
+    <!-- Prompter Screen -->
+    <div class="prompter" id="prompter">
+        <div class="progress-bar" id="progressBar"></div>
+        <div class="guide-line"></div>
+        <div class="script-container" id="scriptContainer">
+            <div class="script-text" id="scriptText"></div>
+        </div>
+        <div class="float-controls">
+            <button class="float-btn" id="slowerBtn" title="Slower">−</button>
+            <span class="speed-display" id="speedDisplay">50 px/s</span>
+            <button class="float-btn" id="fasterBtn" title="Faster">+</button>
+            <button class="float-btn" id="pauseBtn" title="Pause/Play">⏸</button>
+            <button class="float-btn" id="resetBtn" title="Reset">↺</button>
+        </div>
+    </div>
+
+    <script>
+        // Elements
+        const setup = document.getElementById('setup');
+        const prompter = document.getElementById('prompter');
+        const countdown = document.getElementById('countdown');
+        const scriptInput = document.getElementById('scriptInput');
+        const scriptText = document.getElementById('scriptText');
+        const scriptContainer = document.getElementById('scriptContainer');
+        const progressBar = document.getElementById('progressBar');
+        const speedSlider = document.getElementById('speedSlider');
+        const speedNumber = document.getElementById('speedNumber');
+        const fontSlider = document.getElementById('fontSlider');
+        const fontNumber = document.getElementById('fontNumber');
+        const countdownInput = document.getElementById('countdownInput');
+        const startBtn = document.getElementById('startBtn');
+        const pauseBtn = document.getElementById('pauseBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const slowerBtn = document.getElementById('slowerBtn');
+        const fasterBtn = document.getElementById('fasterBtn');
+        const speedDisplay = document.getElementById('speedDisplay');
+
+        // State
+        let scrollSpeed = 50;
+        let fontSize = 48;
+        let isScrolling = false;
+        let scrollPosition = 0;
+        let animationId = null;
+        let lastTime = null;
+
+        // Sync sliders with number inputs
+        speedSlider.addEventListener('input', () => {
+            speedNumber.value = speedSlider.value;
+            scrollSpeed = parseInt(speedSlider.value);
+        });
+        speedNumber.addEventListener('input', () => {
+            speedSlider.value = speedNumber.value;
+            scrollSpeed = parseInt(speedNumber.value);
+        });
+        fontSlider.addEventListener('input', () => {
+            fontNumber.value = fontSlider.value;
+            fontSize = parseInt(fontSlider.value);
+        });
+        fontNumber.addEventListener('input', () => {
+            fontSlider.value = fontNumber.value;
+            fontSize = parseInt(fontNumber.value);
+        });
+
+        // Start
+        startBtn.addEventListener('click', async () => {
+            const script = scriptInput.value.trim();
+            if (!script) {
+                alert('Please paste a script first');
+                return;
+            }
+
+            // Apply font size
+            scriptText.style.fontSize = fontSize + 'px';
+            scriptText.textContent = script;
+
+            // Show countdown
+            const countdownTime = parseInt(countdownInput.value) || 0;
+            if (countdownTime > 0) {
+                setup.classList.add('hidden');
+                countdown.classList.remove('hidden');
+                
+                for (let i = countdownTime; i > 0; i--) {
+                    countdown.textContent = i;
+                    await new Promise(r => setTimeout(r, 1000));
+                }
+                countdown.classList.add('hidden');
+            } else {
+                setup.classList.add('hidden');
+            }
+
+            // Start prompter
+            prompter.classList.add('active');
+            scrollPosition = 0;
+            scriptContainer.style.transform = 'translateY(0)';
+            updateSpeedDisplay();
+            
+            // Start scrolling after a brief pause
+            setTimeout(() => {
+                isScrolling = true;
+                lastTime = performance.now();
+                animate();
+            }, 500);
+        });
+
+        // Animation loop
+        function animate() {
+            if (!isScrolling) return;
+
+            const now = performance.now();
+            const delta = (now - lastTime) / 1000;
+            lastTime = now;
+
+            scrollPosition += scrollSpeed * delta;
+            
+            const maxScroll = scriptContainer.scrollHeight - window.innerHeight + 100;
+            if (scrollPosition >= maxScroll) {
+                scrollPosition = maxScroll;
+                isScrolling = false;
+                pauseBtn.textContent = '▶';
+            }
+
+            scriptContainer.style.transform = `translateY(-${scrollPosition}px)`;
+            progressBar.style.width = `${(scrollPosition / maxScroll) * 100}%`;
+
+            if (isScrolling) {
+                animationId = requestAnimationFrame(animate);
+            }
+        }
+
+        // Pause/Play (click only - no keyboard to avoid noise)
+        pauseBtn.addEventListener('click', togglePause);
+        
+        // Also allow clicking anywhere on screen to pause/play
+        prompter.addEventListener('click', (e) => {
+            if (e.target.closest('.float-controls')) return;
+            togglePause();
+        });
+
+        function togglePause() {
+            isScrolling = !isScrolling;
+            pauseBtn.textContent = isScrolling ? '⏸' : '▶';
+            if (isScrolling) {
+                lastTime = performance.now();
+                animate();
+            }
+        }
+
+        // Speed controls
+        slowerBtn.addEventListener('click', () => {
+            scrollSpeed = Math.max(10, scrollSpeed - 10);
+            updateSpeedDisplay();
+        });
+
+        fasterBtn.addEventListener('click', () => {
+            scrollSpeed = Math.min(150, scrollSpeed + 10);
+            updateSpeedDisplay();
+        });
+
+        function updateSpeedDisplay() {
+            speedDisplay.textContent = `${scrollSpeed} px/s`;
+        }
+
+        // Reset
+        resetBtn.addEventListener('click', () => {
+            isScrolling = false;
+            cancelAnimationFrame(animationId);
+            prompter.classList.remove('active');
+            setup.classList.remove('hidden');
+            scrollPosition = 0;
+            progressBar.style.width = '0';
+            pauseBtn.textContent = '⏸';
+        });
+
+        // Prevent any keyboard events from making noise focus
+        document.addEventListener('keydown', (e) => {
+            e.preventDefault();
+        });
+    </script>
+</body>
+</html>
